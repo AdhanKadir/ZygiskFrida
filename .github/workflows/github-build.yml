@@ -1,0 +1,51 @@
+name: Github Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+
+      - name: Set up JDK
+        uses: actions/setup-java@99b8673ff64fbf99d8d325f52d9a5bdedb8483e9 # v4.2.1
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Download latest Frida gadget (arm64)
+        run: |
+          curl -L -o gadget/libgadget.so.xz https://github.com/frida/frida/releases/download/17.6.2/frida-gadget-17.6.2-android-arm64.so.xz
+          unxz -f gadget/libgadget.so.xz
+
+      - name: Build release modules
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :module:assembleRelease
+
+      - name: Get module version
+        id: module-version
+        run: |
+          MODULE_VERSION=$(grep 'moduleVersion =' module.gradle | awk -F'"' '{print $2}')
+          echo "version=$MODULE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Zygisk release artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: ZygiskFrida-${{ steps.module-version.outputs.version }}-release
+          path: out/magisk_module_zygisk_release
+
+      - name: Upload Riru release artifact
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
+        with:
+          name: ZygiskFrida-${{ steps.module-version.outputs.version }}-riru-release
+          path: out/magisk_module_riru_release
